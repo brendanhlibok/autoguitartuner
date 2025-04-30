@@ -1,6 +1,6 @@
 // === CONFIGURATION ===
 const int sampleRate = 5000;       // Hz
-const int frameSize = 200;         // Number of audio samples per frame
+const int frameSize = 500;         // Number of audio samples per frame
 const float thresh = 100.0;        // Threshold for validating signal
 const int analogPin = A0;          // Audio input pin
 
