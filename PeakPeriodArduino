@@ -1,0 +1,123 @@
+// === CONFIGURATION ===
+const int sampleRate = 5000;       // Hz
+const int frameSize = 200;         // Number of audio samples per frame
+const float thresh = 100.0;        // Threshold for validating signal
+const int analogPin = A0;          // Audio input pin
+
+// === GLOBAL VARIABLES ===
+float frame[frameSize];            // Buffer to store audio samples
+
+// === FUNCTION: Sample Audio from A0 ===
+void sampleAudioFrame() {
+  for (int i = 0; i < frameSize; i++) {
+    frame[i] = analogRead(analogPin); // Reads raw ADC value (0-1023)
+    delayMicroseconds(200);          // 5kHz sampling rate (200us interval)
+  }
+}
+
+// === FUNCTION: Check if Frame is Valid ===
+bool isValidFrame(float* frame, int size, float thresh) {
+  int L = size * 0.3;
+  float maxStart = -1e6;
+  float maxEnd = -1e6;
+
+  for (int i = 0; i < L; i++) {
+    if (frame[i] > maxStart) maxStart = frame[i];
+  }
+  for (int i = size - L; i < size; i++) {
+    if (frame[i] > maxEnd) maxEnd = frame[i];
+  }
+
+  return (maxStart > thresh) && (maxEnd > thresh);
+}
+
+// === FUNCTION: Compute ADMF ===
+void computeADMF(float* frame, int size, float* admf) {
+  int admfLength = size / 2;
+  float maxVal = -1e6;
+
+  for (int i = 0; i < admfLength; i++) {
+    float sum = 0.0;
+    for (int j = 0; j < admfLength; j++) {
+      sum += fabs(frame[j] - frame[j + i]);
+    }
+    admf[i] = sum / admfLength;
+    if (admf[i] > maxVal) maxVal = admf[i];
+  }
+
+  // Invert ADMF: admf = max(admf) - admf
+  for (int i = 0; i < admfLength; i++) {
+    admf[i] = maxVal - admf[i];
+  }
+}
+
+// === FUNCTION: Find Peaks in ADMF ===
+int findPeaks(float* data, int size, int* locs, float threshold) {
+  int peakCount = 0;
+  for (int i = 1; i < size - 1; i++) {
+    if (data[i] > threshold && data[i] > data[i - 1] && data[i] > data[i + 1]) {
+      locs[peakCount++] = i;
+    }
+  }
+  return peakCount;
+}
+
+// === FUNCTION: Estimate Period from Peaks ===
+float estimatePeriod(int* locs, int peakCount, int sampleRate) {
+  if (peakCount < 2) return 0.0;
+
+  float sumDiffs = 0.0;
+  for (int i = 1; i < peakCount; i++) {
+    sumDiffs += (locs[i] - locs[i - 1]);
+  }
+  float avgDiff = sumDiffs / (peakCount - 1);
+  return avgDiff / sampleRate; // Period in seconds
+}
+
+// === FUNCTION: Analyze Audio Frame ===
+void analyzeFrame(float* frame, int size) {
+  if (!isValidFrame(frame, size, thresh)) {
+    Serial.println("Frame invalid - too quiet or incomplete.");
+    return;
+  }
+
+  int admfLength = size / 2;
+  float admf[admfLength];
+  computeADMF(frame, size, admf);
+
+  // Find peaks in ADMF
+  float peakThresh = 0.7 * admf[0];
+  for (int i = 1; i < admfLength; i++) {
+    if (admf[i] > peakThresh) peakThresh = 0.7 * admf[i];
+  }
+
+  int locs[admfLength];
+  int peakCount = findPeaks(admf, admfLength, locs, peakThresh);
+
+  // Print peak locations
+  Serial.print("Peak Count: ");
+  Serial.println(peakCount);
+  Serial.print("Peak Locations: ");
+  for (int i = 0; i < peakCount; i++) {
+    Serial.print(locs[i]);
+    Serial.print(" ");
+  }
+  Serial.println();
+
+  // Estimate period
+  float periodInSeconds = estimatePeriod(locs, peakCount, sampleRate);
+  Serial.print("Estimated Period (s): ");
+  Serial.println(periodInSeconds, 6);
+}
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(analogPin, INPUT);
+  Serial.println("=== Audio Analysis Initialized ===");
+}
+
+void loop() {
+  sampleAudioFrame();
+  analyzeFrame(frame, frameSize);
+  delay(300); // Optional delay between frames
+}
