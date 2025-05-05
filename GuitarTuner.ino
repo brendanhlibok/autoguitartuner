@@ -20,7 +20,7 @@ float periodRanges[6][2] = {
   {0.0071, 0.0062}, // D
   {0.0055, 0.0045}, // G
   {0.0042, 0.0034}, // B
-  {0.0030, 0.0027} // High E
+  {0.0029, 0.0025} // High E
 };
 
 int currentLED = 0;
@@ -144,16 +144,24 @@ void commandMotor(float period, float max, float min){
   delay(200);
 }
 
-void cwRot(){
+void ccRot(){
+  //tighten
   digitalWrite(dirPin1, HIGH);
   digitalWrite(dirPin2, LOW);
   digitalWrite(enablePin, HIGH);
 }
 
-void ccRot(){
+void cwRot(){
+  //loosen
   digitalWrite(dirPin1, LOW);
   digitalWrite(dirPin2, HIGH);
   digitalWrite(enablePin, HIGH);
+}
+
+void motorOff(){
+  digitalWrite(dirPin1, LOW);
+  digitalWrite(dirPin2, LOW);
+  digitalWrite(enablePin, LOW);
 }
 
 int setString(){
@@ -205,7 +213,14 @@ void loop() {
   updateLEDs(currentLED);
   sampleAudioFrame();
   float period = analyzeFrame(frame, frameSize);
-  commandMotor(period, periodRanges[currentLED][0],periodRanges[currentLED][1]);
+
+  if (period > 0.001){
+    commandMotor(period, periodRanges[currentLED][0],periodRanges[currentLED][1]);
+  } else if (period < 0.01){
+    motorOff();
+  }
+  
 
   delay(100); // Optional delay between frames
+
 }
